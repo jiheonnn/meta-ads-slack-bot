@@ -11,16 +11,27 @@ from datetime import datetime, timezone, timedelta
 import schedule
 import time
 from oauth_token_manager import ImwebTokenManager
+from meta_ads_manager import MetaAdsManager
 
 
 class SalesBot:
-    def __init__(self, slack_webhook_url):
+    def __init__(self, slack_webhook_url, meta_access_token=None, meta_ad_account_id=None):
         self.slack_webhook_url = slack_webhook_url
         self.token_manager = ImwebTokenManager(
             client_id='7241ca65-cfcf-4e24-aa94-12eee45a9f7e',
             client_secret='cf1e8fc3-5d8b-41fc-823f-79ba9ff17921'
         )
         self.target_products = ['다이어트의 정석', '벌크업의 정석']
+        
+        # 목표 설정
+        self.daily_sales_target = 600000  # 일일 매출 목표 60만원
+        self.roas_warning_threshold = 1.3  # ROAS 경고 기준 1.3
+        
+        # Meta 광고 매니저 초기화
+        if meta_access_token and meta_ad_account_id:
+            self.meta_ads_manager = MetaAdsManager(meta_access_token, meta_ad_account_id)
+        else:
+            self.meta_ads_manager = None
     
     def get_today_orders(self):
         """오늘의 모든 주문 조회 (페이지네이션 처리)"""
@@ -147,6 +158,38 @@ class SalesBot:
         
         return message.strip()
     
+    def generate_alert_messages(self, sales_data, meta_performance):
+        """목표 달성 축하 및 ROAS 경고 메시지 생성"""
+        alert_messages = []
+        
+        # 매출 목표 달성 확인
+        total_sales = sales_data['total_sales']
+        if total_sales >= self.daily_sales_target:
+            achievement_rate = (total_sales / self.daily_sales_target) * 100
+            alert_messages.append(
+                f"\n🎉 *축하합니다!* 🎉\n"
+                f"일일 매출 목표 달성! ({achievement_rate:.1f}%)\n"
+                f"목표: {self.daily_sales_target:,}원 → 달성: {total_sales:,}원"
+            )
+        
+        # ROAS 경고 확인 (Meta 광고 데이터가 있는 경우)
+        if meta_performance and meta_performance['roas'] > 0:
+            roas = meta_performance['roas']
+            if roas < self.roas_warning_threshold:
+                alert_messages.append(
+                    f"\n⚠️ *ROAS 주의* ⚠️\n"
+                    f"광고 효율이 기준치 이하입니다.\n"
+                    f"현재 ROAS: {roas:.2f}배 (기준: {self.roas_warning_threshold}배)\n"
+                    f"광고 최적화를 검토해보세요."
+                )
+            elif roas >= 2.0:  # 높은 ROAS일 때 축하
+                alert_messages.append(
+                    f"\n🚀 *우수한 광고 성과!* 🚀\n"
+                    f"ROAS: {roas:.2f}배 - 광고가 효율적으로 운영되고 있습니다!"
+                )
+        
+        return "".join(alert_messages) if alert_messages else ""
+    
     def send_to_slack(self, message):
         """슬랙으로 메시지 전송"""
         payload = {
@@ -159,20 +202,39 @@ class SalesBot:
         return response.status_code == 200
     
     def send_sales_report(self, report_time="일일"):
-        """매출 리포트 전송"""
+        """매출 리포트 전송 (Meta 광고 성과 포함)"""
         try:
-            print(f"📊 {report_time} 매출 리포트 생성 중... {datetime.now()}")
+            print(f"📊 {report_time} 리포트 생성 중... {datetime.now()}")
             
+            # 매출 데이터 조회
             sales_data = self.calculate_sales()
-            message = self.format_message(sales_data, report_time)
+            sales_message = self.format_message(sales_data, report_time)
             
-            if self.send_to_slack(message):
+            # Meta 광고 성과 조회 (설정된 경우)
+            meta_message = ""
+            meta_performance = None
+            if self.meta_ads_manager:
+                try:
+                    print("📱 Meta 광고 성과 조회 중...")
+                    meta_performance = self.meta_ads_manager.get_today_performance()
+                    meta_message = "\n\n" + self.meta_ads_manager.format_performance_message(meta_performance)
+                except Exception as meta_error:
+                    print(f"⚠️ Meta 광고 성과 조회 실패: {str(meta_error)}")
+                    meta_message = "\n\n⚠️ Meta 광고 성과 조회 실패"
+            
+            # 알림 메시지 생성 (목표 달성, ROAS 경고)
+            alert_message = self.generate_alert_messages(sales_data, meta_performance)
+            
+            # 통합 메시지 생성
+            combined_message = sales_message + meta_message + alert_message
+            
+            if self.send_to_slack(combined_message):
                 print(f"✅ {report_time} 리포트 전송 성공")
             else:
                 print(f"❌ {report_time} 리포트 전송 실패")
                 
         except Exception as e:
-            error_message = f"❌ {report_time} 매출 리포트 생성 실패: {str(e)}"
+            error_message = f"❌ {report_time} 리포트 생성 실패: {str(e)}"
             print(error_message)
             
             if "토큰" in str(e) or "인증" in str(e) or "401" in str(e):
@@ -236,7 +298,11 @@ class SalesBot:
 def main():
     SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
     
-    sales_bot = SalesBot(SLACK_WEBHOOK_URL)
+    # Meta 광고 설정
+    META_ACCESS_TOKEN = "EAAKUZAdQJpPgBPEc9KSGZAFtP2P9DUTrAZCDT68KKqwxFmHVZAZCQlLepisdV9aWbN6fHft0b3oO1NoEqZBCoFr5fSQVuGNGwETNQ3Xukys6q3SUZC8aOj2u2CypBnsHRQJGec28N2omBz9vSRqh25qxfB5JcCaXaPZAZAudrd9QrU2pgQ7ihKlEsy7cbHHrbeQ9wxoE7XpjX50y3dNxHaNkbc7R89aZCDC3fAInbZCeWctkNWybgwAxFiJ"
+    META_AD_ACCOUNT_ID = "360590366471346"  # Meta 광고 계정 ID
+    
+    sales_bot = SalesBot(SLACK_WEBHOOK_URL, META_ACCESS_TOKEN, META_AD_ACCOUNT_ID)
     
     # 시작시 토큰 상태 확인
     print("🔍 토큰 상태 확인 중...")
@@ -254,9 +320,8 @@ def main():
     print("🎉 완전 자동화 시스템 가동 중!")
     print("🛑 중지: Ctrl+C")
     
-    # 테스트 실행
-    print("\n🧪 테스트 실행...")
-    sales_bot.send_sales_report("테스트")
+    # 시작 알림
+    print("\n📊 매출봇 준비 완료! 스케줄에 따라 자동 실행됩니다.")
     
     # 메인 루프
     while True:
