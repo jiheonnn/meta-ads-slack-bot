@@ -4,16 +4,24 @@
     {
       "src": "api/meta_report.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/meta_report_advanced.py",
+      "use": "@vercel/python"
     }
   ],
   "crons": [
     {
-      "path": "/api/meta_report",
+      "path": "/api/meta_report_advanced",
       "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/meta_report",
+      "path": "/api/meta_report_advanced",
       "schedule": "59 14 * * *"
+    },
+    {
+      "path": "/api/meta_report_advanced",
+      "schedule": "0 0 * * 1"
     }
   ]
 }
