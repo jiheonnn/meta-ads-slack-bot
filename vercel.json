@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/meta_report.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/meta_report",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/meta_report",
+      "schedule": "59 14 * * *"
+    }
+  ]
+}
