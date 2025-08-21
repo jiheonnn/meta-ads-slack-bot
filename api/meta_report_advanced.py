@@ -275,50 +275,65 @@ def send_to_slack(webhook_url, message):
     return response.status_code == 200
 
 
-def handler(request, response):
+from http.server import BaseHTTPRequestHandler
+
+class handler(BaseHTTPRequestHandler):
     """Vercel serverless function handler"""
     
-    # 환경 변수에서 설정 읽기
-    SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
-    META_ACCESS_TOKEN = os.environ.get('META_ACCESS_TOKEN')
-    META_AD_ACCOUNT_ID = os.environ.get('META_AD_ACCOUNT_ID')
-    
-    if not all([SLACK_WEBHOOK_URL, META_ACCESS_TOKEN, META_AD_ACCOUNT_ID]):
-        return response.status(500).json({
-            'error': 'Missing required environment variables'
-        })
-    
-    try:
-        # Meta 광고 매니저 초기화
-        manager = MetaAdsManager(META_ACCESS_TOKEN, META_AD_ACCOUNT_ID)
+    def do_GET(self):
+        """크론잡에서 호출되는 GET 요청 처리"""
+        # 환경 변수에서 설정 읽기
+        SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
+        META_ACCESS_TOKEN = os.environ.get('META_ACCESS_TOKEN')
+        META_AD_ACCOUNT_ID = os.environ.get('META_AD_ACCOUNT_ID')
         
-        # 데이터 수집
-        account_perf = manager.get_account_performance()
-        ads = manager.get_ad_performance()
-        weekly_comp = manager.get_weekly_comparison()
+        if not all([SLACK_WEBHOOK_URL, META_ACCESS_TOKEN, META_AD_ACCOUNT_ID]):
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Missing required environment variables'}).encode())
+            return
         
-        # 리포트 생성
-        message = manager.format_comprehensive_report(
-            account_perf, ads, weekly_comp
-        )
-        
-        # 슬랙으로 전송
-        if send_to_slack(SLACK_WEBHOOK_URL, message):
-            return response.status(200).json({
-                'success': True,
-                'message': 'Comprehensive report sent successfully'
-            })
-        else:
-            return response.status(500).json({
-                'success': False,
-                'message': 'Failed to send slack message'
-            })
+        try:
+            # Meta 광고 매니저 초기화
+            manager = MetaAdsManager(META_ACCESS_TOKEN, META_AD_ACCOUNT_ID)
             
-    except Exception as e:
-        error_message = f"❌ 광고 리포트 생성 실패: {str(e)}"
-        send_to_slack(SLACK_WEBHOOK_URL, error_message)
-        
-        return response.status(500).json({
-            'success': False,
-            'error': str(e)
-        })
+            # 데이터 수집
+            account_perf = manager.get_account_performance()
+            ads = manager.get_ad_performance()
+            weekly_comp = manager.get_weekly_comparison()
+            
+            # 리포트 생성
+            message = manager.format_comprehensive_report(
+                account_perf, ads, weekly_comp
+            )
+            
+            # 슬랙으로 전송
+            if send_to_slack(SLACK_WEBHOOK_URL, message):
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'message': 'Comprehensive report sent successfully'
+                }).encode())
+            else:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'message': 'Failed to send slack message'
+                }).encode())
+                
+        except Exception as e:
+            error_message = f"❌ 광고 리포트 생성 실패: {str(e)}"
+            send_to_slack(SLACK_WEBHOOK_URL, error_message)
+            
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'success': False,
+                'error': str(e)
+            }).encode())
