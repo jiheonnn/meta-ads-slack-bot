@@ -1,0 +1,31 @@
+{
+  "name": "slackbot-meta-reporter",
+  "version": "1.0.0",
+  "description": "Meta Ads reporting bot for Slack",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "npx tsx test/test_meta_report.ts",
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "slack",
+    "meta",
+    "ads",
+    "reporting"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/node": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "dotenv": "^16.3.1",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.0"
+  }
+}

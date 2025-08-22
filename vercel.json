@@ -1,15 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/meta_report.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/meta_report_advanced.py",
-      "use": "@vercel/python"
-    }
-  ],
   "crons": [
     {
       "path": "/api/meta_report_advanced",
