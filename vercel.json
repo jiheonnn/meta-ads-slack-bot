@@ -8,6 +8,18 @@
     {
       "path": "/api/meta_report_advanced",
       "schedule": "59 14 * * *"
+    },
+    {
+      "path": "/api/ad_alert",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/ad_alert",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/ad_alert",
+      "schedule": "0 11 * * *"
     }
   ]
 }
